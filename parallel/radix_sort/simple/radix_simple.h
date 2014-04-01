@@ -74,10 +74,10 @@ public:
                 this->offset_table[i] = this->offset_table[i - 1] + counters[i - 1];
             }
 
-            //negative with inverted order
-            this->offset_table[ last_negative ] = 0;     
+            //negative goes to front
+            this->offset_table[ last_negative ] = counters[ last_negative ];     
             for( size_t i = 0; i < first_negative - 1 ; i++) {
-                this->offset_table[ last_negative -1 - i ] = this->offset_table[ last_negative - i ] + counters[ last_negative - i ];
+                this->offset_table[ last_negative - 1 - i ] = this->offset_table[ last_negative - i ] + counters[ last_negative - 1 - i ];
             }
         } 
 
@@ -87,7 +87,14 @@ public:
             int_val >>= N * n;
             int_val &= ~( ( ~0u ) << N );
             
-            this->buffer[ this->offset_table[ int_val ]++ ] = this->array[i];
+
+            // negative must be reverted
+            if ( last_step && int_val >= first_negative ) {
+                this->buffer[ --this->offset_table[ int_val ] ] = this->array[i];
+            }
+            else {
+                this->buffer[ this->offset_table[ int_val ]++ ] = this->array[i];
+            }
         }
 
         std::swap( this->array, this->buffer );
