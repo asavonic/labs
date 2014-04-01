@@ -37,10 +37,10 @@ public:
     }
 
     void write_to_file( std::string filepath ) {
-        std::ifstream file( filepath.c_str(), std::ifstream::out );
+        std::ofstream file( filepath.c_str(), std::ofstream::out );
 
         for( size_t i = i; i < array.size(); i++ ) {
-            file << array[i];
+            file << array[i] << std::endl;
         }
     }
 };

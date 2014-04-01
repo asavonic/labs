@@ -9,17 +9,23 @@ int main( int argc, char** argv ) {
     auto rand_float = std::bind(dis, gen);
 
     radix_simple<double, 8> sort;
-    sort.array.reserve( 10000000 );
+    sort.array.reserve( 100 );
     for ( size_t i = 0; i < sort.array.capacity(); i++ ) {
         sort.array.push_back( rand_float() );
     }
 
+    std::vector<double> array = sort.array;
+
+    sort.write_to_file("input.log");
     sort.run();
-    /*
-    for ( float& i : sort.array ) {
-        std::cout << i << " " ;
+
+    if ( std::is_sorted( sort.array.begin(), sort.array.end() ) ) {
+        std::cout << "SUCCESS" << std::endl;
     }
-    std::cout << std::endl;
-    */
+    else {
+        std::cout << "FAIL" << std::endl;
+        sort.write_to_file("output_actual.log");
+    }
+
     std::cout << "time elapsed = " << sort.time_spent.count() << " ms" << std::endl;
 }

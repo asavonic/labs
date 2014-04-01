@@ -18,11 +18,13 @@ int main( int argc, char** argv ) {
     }
 
     sort.run();
-    /*
-    for ( float& i : sort.array ) {
-        std::cout << i << " " ;
+
+    if ( std::is_sorted( sort.array.begin(), sort.array.end() ) ) {
+        std::cout << "SUCCESS" << std::endl;
     }
-    std::cout << std::endl;
-    */
+    else {
+        std::cout << "FAIL" << std::endl;
+    }
+
     std::cout << "time elapsed = " << sort.time_spent.count() << " ms" << std::endl;
 }
