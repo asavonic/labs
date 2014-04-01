@@ -28,7 +28,7 @@ public:
     }
 
     void read_from_file( std::string filepath ) {
-        std::ifstream file( filepath.c_str(), std::ifstream::in );
+        std::ifstream file( filepath.c_str(), std::ios::trunc | std::ios::in );
 
         T buf;
         while ( file >> buf ) {
@@ -37,9 +37,9 @@ public:
     }
 
     void write_to_file( std::string filepath ) {
-        std::ofstream file( filepath.c_str(), std::ofstream::out );
+        std::ofstream file( filepath.c_str(), std::ios::trunc | std::ios::out );
 
-        for( size_t i = i; i < array.size(); i++ ) {
+        for( size_t i = 0; i < array.size(); i++ ) {
             file << array[i] << std::endl;
         }
     }
