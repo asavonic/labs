@@ -4,6 +4,8 @@
 #include <radix_simple.h>
 #include <valarray>
 #include <atomic>
+#include <omp.h>
+
 
 template <class T, std::size_t N >
 class radix_omp  : public radix_simple<T, N> {
@@ -18,20 +20,29 @@ public:
     virtual void pass( size_t n ) {
         std::valarray<size_t> counters ( T(0), 1 << N );
         std::array< std::atomic_size_t, 1 << N> offset_table = {};
-
+        
+        std::vector< decltype(counters) > thread_counters;
 #pragma omp parallel 
         {
+            unsigned int num_threads = omp_get_num_threads();
+            unsigned int tid = omp_get_thread_num();
+#pragma omp master
+            thread_counters.resize( num_threads );
+#pragma omp barrier
             auto local_counters = counters;
-#pragma omp for
-            for ( size_t i = 0; i < this->array.size(); i++ ) {
+            auto borders = parallel_for_get_borders( num_threads, tid, 0, this->array.size(), 1 );
+            for ( size_t i = borders.first; i < borders.second; i++ ) {
                 Tuint* int_ptr = reinterpret_cast<Tuint*>( &( this->array[i] ) );
                 Tuint int_val = *int_ptr;
                 int_val >>= N * n;
                 int_val &= ~( ( ~0u ) << N );
                 local_counters[ int_val ] += 1;
             }
+#pragma omp barrier
 #pragma omp critical
             counters += local_counters;
+
+            thread_counters[ tid ] = std::move( local_counters );
         }
 
         // if this is the last step we need to properly deal with negative 
@@ -70,7 +81,7 @@ public:
             }
         } 
 
-#pragma omp parallel for
+//#pragma omp parallel for
         for ( size_t i = 0; i < this->array.size(); i++ ) {
             Tuint* int_ptr = reinterpret_cast<Tuint*>( &this->array[i] );
             Tuint int_val = *int_ptr;
@@ -92,6 +103,15 @@ public:
         std::swap( this->array, this->buffer );
     }
         
+private:
+    std::pair<size_t, size_t> parallel_for_get_borders( unsigned int num_threads, unsigned int tid, size_t begin, size_t end, int inc ) {
+        size_t iterations_num = ( end - begin ) / inc;
+
+        size_t first = ( iterations_num / num_threads ) * inc * tid;
+        size_t second = ( tid == num_threads - 1 ) ? end : ( iterations_num / num_threads ) * inc * ( tid + 1 ); 
+
+        return std::pair<size_t, size_t> { first, second };
+    }
 };
 
 #endif
