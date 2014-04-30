@@ -3,6 +3,7 @@
 
 #include <radix_simple.h>
 #include <valarray>
+#include <atomic>
 
 template <class T, std::size_t N >
 class radix_omp  : public radix_simple<T, N> {
@@ -10,16 +11,27 @@ public:
 
     typedef typename radix_simple<T, N>::Tuint Tuint;
 
-    virtual void pass( size_t n ) {
-        std::valarray<T> counters ( T(0), 1 << N );
+    virtual void hello() {
+        std::cout << "hello from radix_omp" << std::endl;
+    }
 
-//#pragma omp parallel private( counters ) 
-        for ( size_t i = 0; i < this->array.size(); i++ ) {
-            Tuint* int_ptr = reinterpret_cast<Tuint*>( &( this->array[i] ) );
-            Tuint int_val = *int_ptr;
-            int_val >>= N * n;
-            int_val &= ~( ( ~0u ) << N );
-            counters[ int_val ] += 1;
+    virtual void pass( size_t n ) {
+        std::valarray<size_t> counters ( T(0), 1 << N );
+        std::array< std::atomic_size_t, 1 << N> offset_table = {};
+
+#pragma omp parallel 
+        {
+            auto local_counters = counters;
+#pragma omp for
+            for ( size_t i = 0; i < this->array.size(); i++ ) {
+                Tuint* int_ptr = reinterpret_cast<Tuint*>( &( this->array[i] ) );
+                Tuint int_val = *int_ptr;
+                int_val >>= N * n;
+                int_val &= ~( ( ~0u ) << N );
+                local_counters[ int_val ] += 1;
+            }
+#pragma omp critical
+            counters += local_counters;
         }
 
         // if this is the last step we need to properly deal with negative 
@@ -36,34 +48,45 @@ public:
         }
 
         if ( !last_step ) {
-            this->offset_table[0] = 0;
-            for ( size_t i = 1; i < this->offset_table.size(); i++ ) {
-                this->offset_table[i] = this->offset_table[i - 1] + counters[i - 1];
+            offset_table[0] = 0;
+            for ( size_t i = 1; i < offset_table.size(); i++ ) {
+                offset_table[i] = offset_table[i - 1] + counters[i - 1];
             }
         } 
         else {
-            this->offset_table[0] = negative_num;     
+            offset_table[0] = negative_num;     
 
             // positive
+// #pragma omp parallel for
             for ( size_t i = 1; i < first_negative; i++ ) {
-                this->offset_table[i] = this->offset_table[i - 1] + counters[i - 1];
+                offset_table[i] = offset_table[i - 1] + counters[i - 1];
             }
 
-            //negative with inverted order
-            this->offset_table[ last_negative ] = 0;     
+            //negative goes to front
+            offset_table[ last_negative ] = counters[ last_negative ];     
+
             for( size_t i = 0; i < first_negative - 1 ; i++) {
-                this->offset_table[ last_negative -1 - i ] = this->offset_table[ last_negative - i ] + counters[ last_negative - i ];
+                offset_table[ last_negative - 1 - i ] = offset_table[ last_negative - i ] + counters[ last_negative - 1 - i ];
             }
         } 
 
-//#pragma omp parallel for
+#pragma omp parallel for
         for ( size_t i = 0; i < this->array.size(); i++ ) {
             Tuint* int_ptr = reinterpret_cast<Tuint*>( &this->array[i] );
             Tuint int_val = *int_ptr;
             int_val >>= N * n;
             int_val &= ~( ( ~0u ) << N );
             
-            this->buffer[ this->offset_table[ int_val ]++ ] = this->array[i];
+
+            size_t index = 0;
+            // negative must be reverted
+            if ( last_step && int_val >= first_negative ) {
+                index = --offset_table[ int_val ];
+            }
+            else {
+                index = offset_table[ int_val ]++; 
+            }
+            this->buffer[ index ] = this->array[i];
         }
 
         std::swap( this->array, this->buffer );
