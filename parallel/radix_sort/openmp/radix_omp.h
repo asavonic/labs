@@ -18,8 +18,8 @@ public:
     }
 
     virtual void pass( size_t n ) {
-        std::valarray<size_t> counters ( T(0), 1 << N );
-        std::array< std::atomic_size_t, 1 << N> offset_table = {};
+        std::valarray<size_t> counters ( size_t(0), 1 << N );
+        std::valarray<size_t> offset_table( size_t(0), 1 << N ); 
         
         std::vector< decltype(counters) > thread_counters;
 #pragma omp parallel 
@@ -68,7 +68,6 @@ public:
             offset_table[0] = negative_num;     
 
             // positive
-// #pragma omp parallel for
             for ( size_t i = 1; i < first_negative; i++ ) {
                 offset_table[i] = offset_table[i - 1] + counters[i - 1];
             }
@@ -81,25 +80,48 @@ public:
             }
         } 
 
-//#pragma omp parallel for
-        for ( size_t i = 0; i < this->array.size(); i++ ) {
-            Tuint* int_ptr = reinterpret_cast<Tuint*>( &this->array[i] );
-            Tuint int_val = *int_ptr;
-            int_val >>= N * n;
-            int_val &= ~( ( ~0u ) << N );
-            
+#pragma omp parallel 
+        {
+            unsigned int num_threads = omp_get_num_threads();
+            unsigned int tid = omp_get_thread_num();
 
-            size_t index = 0;
-            // negative must be reverted
-            if ( last_step && int_val >= first_negative ) {
-                index = --offset_table[ int_val ];
-            }
+            // hardcode goes here
+            auto local_offset_table = offset_table;
+            if (!last_step) {
+                for ( unsigned int i = 0; i < tid; i++ ) {
+                    local_offset_table += thread_counters[i];
+                }
+            } 
             else {
-                index = offset_table[ int_val ]++; 
+                for ( unsigned int i = 0; i < tid; i++ ) {
+                    for ( size_t j = 0; j < first_negative; j++ ) {
+                        local_offset_table[j] += thread_counters[i][j];
+                    }
+                    for ( size_t j = first_negative; j < local_offset_table.size(); j++ ) {
+                        local_offset_table[j] -= thread_counters[i][j];
+                    }
+                }
             }
-            this->buffer[ index ] = this->array[i];
-        }
 
+            auto borders = parallel_for_get_borders( num_threads, tid, 0, this->array.size(), 1 );
+            for ( size_t i = borders.first; i < borders.second; i++ ) {
+                Tuint* int_ptr = reinterpret_cast<Tuint*>( &this->array[i] );
+                Tuint int_val = *int_ptr;
+                int_val >>= N * n;
+                int_val &= ~( ( ~0u ) << N );
+                
+
+                size_t index = 0;
+                // negative must be reverted
+                if ( last_step && int_val >= first_negative ) {
+                    index = --local_offset_table[ int_val ];
+                }
+                else {
+                    index = local_offset_table[ int_val ]++; 
+                }
+                this->buffer[ index ] = this->array[i];
+            }
+        }
         std::swap( this->array, this->buffer );
     }
         

@@ -10,7 +10,7 @@ using sort_type = double;
 void run_sort( sorter<sort_type>* sort, size_t size ) {
     std::random_device rd;
     std::mt19937_64 gen(rd());
-    std::uniform_real_distribution<sort_type> dis(0, 1000.f);
+    std::uniform_real_distribution<sort_type> dis(-1000.f, 1000.f);
     auto rand_float = std::bind(dis, gen);
 
     sort->array.reserve( size );
