@@ -1,6 +1,6 @@
 #include <iostream>
 #include <boost/program_options.hpp>
-#include <common/sorter.h>
+#include <sorter.h>
 #include <radix_simple.h>
 #include <radix_omp.h>
 #include <memory>
