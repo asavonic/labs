@@ -13,7 +13,7 @@ class sorter {
 public:
     virtual ~sorter() {}
 
-    std::vector<T> array;
+    std::vector<T> data;
     std::chrono::milliseconds time_spent;
 
     virtual void sort() = 0;
@@ -40,15 +40,15 @@ public:
 
         T buf;
         while ( file >> buf ) {
-            array.push_back( buf );
+            data.push_back( buf );
         }
     }
 
     virtual void write_to_file( std::string filepath ) {
         std::ofstream file( filepath.c_str(), std::ios::trunc | std::ios::out );
 
-        for( size_t i = 0; i < array.size(); i++ ) {
-            file << array[i] << std::endl;
+        for( size_t i = 0; i < data.size(); i++ ) {
+            file << data[i] << std::endl;
         }
     }
 };

@@ -34,7 +34,7 @@ public:
         // constexpr uint32_t highest_bit = 1 << ( sizeof(T) * 8 - 1 );
         std::cout << "running simple radix" << std::endl;
 
-        this->buffer.resize( this->array.size() );
+        this->buffer.resize( this->data.size() );
         for ( size_t step = 0; sizeof(T) * 8 > step * N; step++ ) {
             pass( step );
         }
@@ -43,7 +43,7 @@ public:
     virtual void pass( size_t n ) {
         std::array< size_t, 1 << N >   counters = {};
         std::array< size_t, 1 << N >   offset_table = {};
-        for ( T val : this->array ) {
+        for ( T val : this->data ) {
             Tuint* int_ptr = reinterpret_cast<Tuint*>( &val );
             Tuint int_val = *int_ptr;
             int_val >>= N * n;
@@ -86,8 +86,8 @@ public:
             }
         } 
 
-        for ( size_t i = 0; i < this->array.size(); i++ ) {
-            Tuint* int_ptr = reinterpret_cast<Tuint*>( &this->array[i] );
+        for ( size_t i = 0; i < this->data.size(); i++ ) {
+            Tuint* int_ptr = reinterpret_cast<Tuint*>( &this->data[i] );
             Tuint int_val = *int_ptr;
             int_val >>= N * n;
             int_val &= ~( ( ~0u ) << N );
@@ -95,14 +95,14 @@ public:
 
             // negative must be reverted
             if ( last_step && int_val >= first_negative ) {
-                this->buffer[ --offset_table[ int_val ] ] = this->array[i];
+                this->buffer[ --offset_table[ int_val ] ] = this->data[i];
             }
             else {
-                this->buffer[ offset_table[ int_val ]++ ] = this->array[i];
+                this->buffer[ offset_table[ int_val ]++ ] = this->data[i];
             }
         }
 
-        std::swap( this->array, this->buffer );
+        std::swap( this->data, this->buffer );
     }
         
 };

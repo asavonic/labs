@@ -1,9 +1,10 @@
 #include <iostream>
+#include <memory>
 #include <boost/program_options.hpp>
 #include <sorter.h>
 #include <radix_simple.h>
 #include <radix_omp.h>
-#include <memory>
+#include <radix_tbb.h>
 
 using sort_type = double;
 
@@ -13,14 +14,14 @@ void run_sort( sorter<sort_type>* sort, size_t size ) {
     std::uniform_real_distribution<sort_type> dis(-1000.f, 1000.f);
     auto rand_float = std::bind(dis, gen);
 
-    sort->array.reserve( size );
-    for ( size_t i = 0; i < sort->array.capacity(); i++ ) {
-        sort->array.push_back( rand_float() );
+    sort->data.reserve( size );
+    for ( size_t i = 0; i < sort->data.capacity(); i++ ) {
+        sort->data.push_back( rand_float() );
     }
 
     sort->run();
 
-    if ( std::is_sorted( sort->array.begin(), sort->array.end() ) ) {
+    if ( std::is_sorted( sort->data.begin(), sort->data.end() ) ) {
         std::cout << "SUCCESS" << std::endl;
     }
     else {
@@ -73,7 +74,12 @@ int main(int argc, char *argv[])
                 sort.reset( new radix_omp<sort_type, radix_step> );
             }
             else {
-                throw std::runtime_error( "parallel mode was not defined properly" );
+                if ( parallel == "tbb" ) {
+                    sort.reset( new radix_tbb<sort_type, radix_step> );
+                }
+                else {
+                    throw std::runtime_error( "parallel mode was not defined properly" );
+                }
             }
         }
 

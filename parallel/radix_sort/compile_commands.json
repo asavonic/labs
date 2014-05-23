@@ -1,0 +1,13 @@
+[
+{
+  "directory": "/data/nfs/labs/parallel/radix_sort",
+  "command": "g++ -O2 -fopenmp --std=c++11 -I common -I openmp -I simple -I tbb -I . -o radix main.cpp -lboost_program_options",
+  "file": "/data/nfs/labs/parallel/radix_sort/main.cpp"
+}
+,
+{
+  "directory": "/data/nfs/labs/parallel/radix_sort",
+  "command": "/usr/i686-pc-linux-gnu/gcc-bin/4.7.3/g++ -O2 -fopenmp --std=c++11 -I common -I openmp -I simple -I tbb -I . -o radix main.cpp -lboost_program_options",
+  "file": "/data/nfs/labs/parallel/radix_sort/main.cpp"
+}
+]

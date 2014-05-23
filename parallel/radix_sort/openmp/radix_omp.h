@@ -30,9 +30,9 @@ public:
             thread_counters.resize( num_threads );
 #pragma omp barrier
             auto local_counters = counters;
-            auto borders = parallel_for_get_borders( num_threads, tid, 0, this->array.size(), 1 );
+            auto borders = parallel_for_get_borders( num_threads, tid, 0, this->data.size(), 1 );
             for ( size_t i = borders.first; i < borders.second; i++ ) {
-                Tuint* int_ptr = reinterpret_cast<Tuint*>( &( this->array[i] ) );
+                Tuint* int_ptr = reinterpret_cast<Tuint*>( &( this->data[i] ) );
                 Tuint int_val = *int_ptr;
                 int_val >>= N * n;
                 int_val &= ~( ( ~0u ) << N );
@@ -103,9 +103,9 @@ public:
                 }
             }
 
-            auto borders = parallel_for_get_borders( num_threads, tid, 0, this->array.size(), 1 );
+            auto borders = parallel_for_get_borders( num_threads, tid, 0, this->data.size(), 1 );
             for ( size_t i = borders.first; i < borders.second; i++ ) {
-                Tuint* int_ptr = reinterpret_cast<Tuint*>( &this->array[i] );
+                Tuint* int_ptr = reinterpret_cast<Tuint*>( &this->data[i] );
                 Tuint int_val = *int_ptr;
                 int_val >>= N * n;
                 int_val &= ~( ( ~0u ) << N );
@@ -119,10 +119,10 @@ public:
                 else {
                     index = local_offset_table[ int_val ]++; 
                 }
-                this->buffer[ index ] = this->array[i];
+                this->buffer[ index ] = this->data[i];
             }
         }
-        std::swap( this->array, this->buffer );
+        std::swap( this->data, this->buffer );
     }
         
 private:
