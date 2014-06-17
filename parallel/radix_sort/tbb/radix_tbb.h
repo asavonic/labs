@@ -17,6 +17,7 @@ class radix_tbb  : public sorter<T> {
         typedef typename radix_simple<T, N>::Tuint Tuint;
 
         std::vector< std::pair<int, int> > chunks;
+        size_t size;
         std::reference_wrapper< std::vector<T> > data;
         std::reference_wrapper< std::vector<T> > buffer;
 
@@ -24,14 +25,37 @@ class radix_tbb  : public sorter<T> {
 
         ComputeChunk ( const ComputeChunk& parent, tbb::split ) : data(parent.data), buffer(parent.buffer) {
             final_swap = parent.final_swap;
+            size = 0;
         }
 
         ComputeChunk ( radix_tbb<T, N>* sorter ) : data(sorter->data), buffer(sorter->buffer) {
             final_swap = 0;
+            size = 0;
+        }
+
+        void copy_phisical_memory( decltype(data) _to, decltype(data) _from, decltype(chunks) _chunks ) {
+            for ( auto& chunk : _chunks ) {
+                memcpy( &_to.get()[ chunk.first ], &_from.get()[ chunk.first ], ( chunk.second - chunk.first ) * sizeof(T) );
+            }
+        }
+
+        bool is_sorted() {
+            size_t pos_prev = chunks.front().first;
+
+            for ( auto& chunk : chunks ) {
+                for ( size_t pos = chunk.first; pos < chunk.second; pos++ ) {
+                    if ( data.get()[pos_prev] > data.get()[pos] ) {
+                        return false;
+                    }
+                    pos_prev = pos;
+                }
+            }
+
+            return true;
         }
 
         struct {
-            using chunk_iterator =  typename decltype(chunks)::iterator;
+            using chunk_iterator = typename decltype(chunks)::iterator;
             size_t pos;
             chunk_iterator begin;
             chunk_iterator end;
@@ -64,16 +88,52 @@ class radix_tbb  : public sorter<T> {
             }
         } merge;
 
-
         void operator()( tbb::blocked_range<int> r ) {
-            chunks.push_back( std::pair<int, int>( r.begin(), r.end() ) );
-
             std::sort( data.get().begin() + r.begin(), data.get().begin() + r.end() );
+            
+            auto new_chunks = chunks;
+            new_chunks.push_back( std::pair<int, int>( r.begin(), r.end() ) );
 
-            merge.init( chunks.begin(), chunks.end() );
+            if ( !chunks.empty() ) {
+                merge.init( chunks.begin(), chunks.end() );
+
+                int my_pos = merge.get_next();
+                int other_pos = r.begin();
+
+                for ( auto& chunk : new_chunks ) {
+                    for ( size_t i = chunk.first; i < chunk.second; i++ ) {
+                        if ( my_pos != -1 && ( other_pos == -1 || data.get()[my_pos] < data.get()[other_pos] ) ) {
+                            buffer.get()[i] = data.get()[my_pos];
+                            my_pos = merge.get_next();
+                        } 
+                        else {
+                            buffer.get()[i] = data.get()[other_pos];
+                            other_pos = ( other_pos + 1 == r.end() ) ? -1 : other_pos + 1;
+                        }
+                    }
+                }
+
+                copy_phisical_memory( data, buffer, new_chunks );
+            }
+
+            size += r.end() - r.begin();
+            chunks = new_chunks;
+#ifndef NDEBUG
+            if ( !is_sorted() ) {
+                throw std::runtime_error("operator() for " + std::to_string( chunks.size() ) + " chunks fails!");
+            }
+#endif
         }
 
         void join( ComputeChunk& other ) {
+            merge.init( chunks.begin(), chunks.end() );
+            other.merge.init( other.chunks.begin(), other.chunks.end() );
+
+            if ( &data.get().front() != &other.data.get().front() ) {
+                other.copy_phisical_memory( other.buffer, other.data, other.chunks );
+                std::swap( other.data, other.buffer );
+            }
+
             auto new_chunks = chunks;
             new_chunks.insert( new_chunks.end(), other.chunks.begin(), other.chunks.end() );
 
@@ -82,22 +142,27 @@ class radix_tbb  : public sorter<T> {
 
             for ( auto& chunk : new_chunks ) {
                 for ( size_t i = chunk.first; i < chunk.second; i++ ) {
-                    if ( other_pos == -1 || data.get()[my_pos] < other.data.get()[other_pos] ) {
+                    if ( my_pos != -1 && ( other_pos == -1 || data.get()[my_pos] < data.get()[other_pos] ) ) {
                         buffer.get()[i] = data.get()[my_pos];
                         my_pos = merge.get_next();
                     } 
                     else {
-                        if ( my_pos == -1 || other.data.get()[other_pos] < data.get()[my_pos] ) {
-                            buffer.get()[i] = other.data.get()[other_pos];
-                            other_pos = other.merge.get_next();
-                        }
+                        buffer.get()[i] = data.get()[other_pos];
+                        other_pos = other.merge.get_next();
                     }
                 }
             }
 
             chunks = new_chunks;
+            size += other.size;
             std::swap( buffer, data );
-            final_swap += other.final_swap + 1;
+            final_swap++;
+
+#ifndef NDEBUG
+            if ( !is_sorted() ) {
+                throw std::runtime_error("join() fails!");
+            }
+#endif
         }
     };
 
@@ -115,9 +180,9 @@ class radix_tbb  : public sorter<T> {
             std::swap( buffer, this->data );
             std::cout << "swapped" << std::endl;
         }
-        std::cout << "final swap = " << compute.final_swap << std::endl;
+        std::cout << "final_swap = " << compute.final_swap << std::endl;
+
     } 
-    
     
 };
 #endif
