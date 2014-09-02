@@ -25,7 +25,7 @@ class radix_tbb  : public sorter<T> {
 
             bool order(const Tuint x, const Tuint bit)
             {
-                return !!(((x >> 1) ^ x) & bit);
+                return false;
             }
 
             void operator()( const tbb::blocked_range<int>& r, tbb::pre_scan_tag )
@@ -87,8 +87,6 @@ class radix_tbb  : public sorter<T> {
 
 
         for ( Tuint bit = 1; !(bit & MSB_mask); bit <<= 1 ) {
-            std::cout << "processed " << bit << std::endl;
-
             Tuint* data_uint_ptr = reinterpret_cast<Tuint*>( &parent_t::data.front()  );
             Tuint* buffer_uint_ptr = reinterpret_cast<Tuint*>( &buffer.front()  );
 
@@ -96,31 +94,6 @@ class radix_tbb  : public sorter<T> {
             tbb::parallel_scan( tbb::blocked_range<int>(0, buffer.size(), 4), body);
             std::swap( this->data, this->buffer );
         }
-
-        //std::swap( this->data, this->buffer );
-
-        //MSD in inverse opder
-        size_t l_bound = 0;
-        size_t r_bound = 0;
-        //counting loop
-//        for(size_t i = 0; i < this->data.size(); ++i) {
-            /* if ( data_uint_ptr[i] & MSB_mask ) ++r_bound; */
-  //          this->data[i] = *( (Tuint*) &this->data[i] ) & ~MSB_mask; 
-    //    }
-        /*
-
-        size_t middle = r_bound - 1;
-        //permutation loop
-        for(size_t i = 0; i < this->data.size(); ++i) {
-            if( data_uint_ptr[i] & MSB_mask ) {
-                buffer_uint_ptr[ l_bound ] = data_uint_ptr[i];
-                l_bound++;
-            }
-            else {
-                buffer_uint_ptr[r_bound++] = data_uint_ptr[i];
-            }
-        } 
-        std::swap( this->data, this->buffer ); */
     }
 };
 #endif
