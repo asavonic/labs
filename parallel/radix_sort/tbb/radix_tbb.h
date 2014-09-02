@@ -25,7 +25,8 @@ class radix_tbb  : public sorter<T> {
 
             bool order(const Tuint x, const Tuint bit)
             {
-                return false;
+                constexpr Tuint MSB_mask = 1 << ( sizeof(Tuint) * 8 - 1 );
+                return ( bit == MSB_mask ) && ( x & bit );
             }
 
             void operator()( const tbb::blocked_range<int>& r, tbb::pre_scan_tag )
