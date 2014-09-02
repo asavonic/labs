@@ -6,12 +6,13 @@
 #include <radix_omp.h>
 #include <radix_tbb.h>
 
-using sort_type = double;
+using sort_type = unsigned int;
 
 void run_sort( sorter<sort_type>* sort, size_t size ) {
     std::random_device rd;
     std::mt19937_64 gen(rd());
-    std::uniform_real_distribution<sort_type> dis(-1000.f, 1000.f);
+    //std::uniform_real_distribution<sort_type> dis(-1000.f, 1000.f);
+    std::uniform_int_distribution<sort_type> dis(-1000, 1000);
     auto rand_float = std::bind(dis, gen);
 
     sort->data.reserve( size );
@@ -47,10 +48,10 @@ int main(int argc, char *argv[])
         po::options_description desc("This is radix sort runner.\n\nAllowed options:");
         desc.add_options()
             ("help", "produce help message")
-            ("size", po::value<size_t>( &array_size )->required(), "number of elements in array")
+            ("size", po::value<size_t>( &array_size ), "number of elements in array")
             ("input,i", po::value< std::string >( &input_file_path ), "path to input file")
             ("output,o", po::value< std::string >( &output_file_path ), "path to output file")
-            ("parallel", po::value< std::string >( &parallel )->required(), "set to omp, tbb, mpi_omp or none")
+            ("parallel", po::value< std::string >( &parallel ), "set to omp, tbb, mpi_omp or none")
         ;
 
 

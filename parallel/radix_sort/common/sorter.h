@@ -7,6 +7,7 @@
 #include <iostream>
 #include <fstream>
 #include <chrono>
+#include <bitset>
 
 template <class T>
 class sorter {
@@ -48,7 +49,7 @@ public:
         std::ofstream file( filepath.c_str(), std::ios::trunc | std::ios::out );
 
         for( size_t i = 0; i < data.size(); i++ ) {
-            file << data[i] << std::endl;
+            file << std::bitset< sizeof(T) * 8 >( data[i] ) << std::endl;
         }
     }
 };
