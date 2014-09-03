@@ -44,6 +44,7 @@ int main(int argc, char *argv[])
         std::string input_file_path;
         std::string output_file_path;
         std::string parallel;
+        bool no_verification = 0;
 
         po::options_description desc("This is radix sort runner.\n\nAllowed options:");
         desc.add_options()
@@ -52,6 +53,7 @@ int main(int argc, char *argv[])
             ("input,i", po::value< std::string >( &input_file_path ), "path to input file")
             ("output,o", po::value< std::string >( &output_file_path ), "path to output file")
             ("parallel", po::value< std::string >( &parallel )->required(), "set to omp, tbb, mpi_omp or none")
+            ("no-verification", "disable verification of result data")
         ;
 
 
@@ -61,6 +63,10 @@ int main(int argc, char *argv[])
         if (vm.count("help")) {
             std::cout << desc << std::endl;
             return 1;
+        }
+
+        if ( vm.count("no-verification") ) {
+            no_verification = true;
         }
 
         po::notify(vm);
@@ -74,7 +80,7 @@ int main(int argc, char *argv[])
             sort.reset( new radix_omp<sort_type, radix_step> );
         } else if ( parallel == "tbb" ) {
             sort.reset( new radix_tbb<sort_type, radix_step> );
-        } else if ( parallel == "mpi" ) {
+        } else if ( parallel == "mpi_omp" ) {
             sort.reset( new radix_mpi<sort_type, radix_step> );
         } else {
             throw std::runtime_error( "parallel mode was not defined properly" );

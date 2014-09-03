@@ -13,6 +13,16 @@ class sorter {
 public:
     virtual ~sorter() {}
 
+    sorter() {}
+
+    sorter( std::vector<T>&& in_data ) {
+        data = in_data;
+    }
+
+    sorter( std::vector<T>& in_data ) {
+        data = in_data;
+    }
+
     std::vector<T> data;
     std::chrono::milliseconds time_spent;
 

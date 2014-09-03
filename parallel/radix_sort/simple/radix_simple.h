@@ -9,6 +9,15 @@
 template <class T, std::size_t N >
 class radix_simple  : public sorter<T> {
 public:
+
+    using parent_t = sorter<T>;
+    radix_simple( std::vector<T>&& in_data ) : parent_t( in_data ) {
+        static_check_supported_types();
+    }
+    radix_simple( std::vector<T>& in_data ) : parent_t( in_data ) {
+        static_check_supported_types();
+    }
+
     std::vector<T>     buffer;
 
     // here goes magic. dont know how to make it better.
@@ -20,6 +29,10 @@ public:
     typedef typename std::conditional< sizeof(T) == 8, uint64_t, uint_le_32 >::type Tuint;
     
     radix_simple() {
+        static_check_supported_types();
+    }
+
+    void static_check_supported_types() {
         static_assert( std::is_arithmetic<T>::value,
                                   "Radix sort works only with arithmetic types" );
         static_assert( ! std::is_same<Tuint, not_supported_type>::value,

@@ -11,6 +11,11 @@ template <class T, std::size_t N >
 class radix_omp  : public radix_simple<T, N> {
 public:
 
+    using parent_t = radix_simple<T,N>;
+    radix_omp( std::vector<T>&& in_data ) : parent_t( in_data ) {}
+    radix_omp( std::vector<T>& in_data ) : parent_t( in_data ) {}
+    radix_omp() {}
+
     typedef typename radix_simple<T, N>::Tuint Tuint;
 
     virtual void hello() {

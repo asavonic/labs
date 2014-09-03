@@ -44,7 +44,9 @@ public:
             std::sort( parent_t::data.begin(), parent_t::data.begin() + root_data_shift );
         }
 
-        std::sort( process_data.begin(), process_data.end() );
+        //std::sort( process_data.begin(), process_data.end() );
+        radix_omp<T, 8> sorter( std::move( process_data ) );
+        sorter.sort();
 
         mpi::gather( world, &process_data.front(), process_data.size(), &parent_t::data[root_data_shift], root );
 
