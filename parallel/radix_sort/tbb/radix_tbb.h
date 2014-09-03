@@ -20,10 +20,13 @@ class radix_tbb  : public radix_simple<T, N> {
     using Tuint = typename parent_t::Tuint;
 
     using part_t = std::pair<size_t, size_t>;
+    using parts_vector_t = std::vector<part_t>;
+    using parts_counters_map_t = std::map< part_t, std::array<size_t, N> >;
+    using parts_offsets_map_t = std::map< part_t, std::array<size_t, N> >;
 
-    tbb::concurrent_hash_map< part_t, std::array<size_t, N> > compute_counters_tbb( std::vector<part_t> parts, size_t mask_step )
+    parts_counters_map_t compute_counters_tbb( std::vector<part_t> parts, size_t mask_step )
     {
-        tbb::concurrent_hash_map< part_t, std::array<size_t, N> > total_parts_counters;
+        parts_counters_map_t total_parts_counters;
 
         tbb::parallel_for( tbb::blocked_range<size_t>( 0, parts.size() ), 
             [&]( const tbb::blocked_range<size_t>& r ) {
@@ -38,7 +41,7 @@ class radix_tbb  : public radix_simple<T, N> {
                         part_counters[ pos ]++;
                     }
 
-                    total_parts_counters.insert( part_counters, parts[ part_index ] );
+                    total_parts_counters[ parts[ part_index ] ] = part_counters;
                 }
             }
         );
@@ -46,7 +49,7 @@ class radix_tbb  : public radix_simple<T, N> {
         return total_parts_counters;
     }
 
-    std::vector<std::atomic_size_t> compute_offsets( std::vector<std::atomic_size_t> counters ) {
+    void convert_counters_map_to_offset_map( parts_vector_t parts,  std::array<size_t, N> counters ) {
         std::vector<std::atomic_size_t> offsets( counters.size() );
 
         for ( size_t i = 1; i < offsets.size(); i++ ) {
@@ -76,7 +79,7 @@ class radix_tbb  : public radix_simple<T, N> {
         auto parts = split_data( parent_t::data );
         
         for ( size_t mask_step = 0; sizeof(T) * 8 > mask_step * N; mask_step++ ) {
-            auto parts_counters = compute_counters_tbb( parts, mask_step );
+            auto parts_counters_map = compute_counters_tbb( parts, mask_step );
         }
     
     }
