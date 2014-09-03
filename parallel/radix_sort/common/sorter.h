@@ -23,6 +23,10 @@ public:
         data = in_data;
     }
 
+    virtual int rank() {
+        return 0;
+    }
+
     std::vector<T> data;
     std::chrono::milliseconds time_spent;
 

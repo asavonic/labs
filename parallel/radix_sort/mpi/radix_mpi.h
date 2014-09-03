@@ -17,9 +17,19 @@ public:
 
     using parent_t = radix_simple<T,N>;
 
+    radix_mpi( std::vector<T>&& in_data ) : parent_t( in_data ) {}
+    radix_mpi( std::vector<T>& in_data ) : parent_t( in_data ) {}
+    radix_mpi() {}
+
+
+    virtual int rank() {
+        return world.rank();
+    }
+
     virtual void sort() override 
     {
         mpi_sort();
+        MPI_Finalize();
         if ( world_rank != 0 ) {
             exit( 0 );
         }
@@ -27,8 +37,6 @@ public:
 
     virtual void mpi_sort() 
     {
-        mpi::environment env;
-        mpi::communicator world;
         world_rank = world.rank();
         int root = 0;
 
@@ -91,9 +99,11 @@ public:
     virtual void pass( size_t n ) {
         
     }
-        
+
 private:
     size_t world_rank;
+    mpi::environment env;
+    mpi::communicator world;
 };
 
 #endif
