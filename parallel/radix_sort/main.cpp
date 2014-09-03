@@ -75,7 +75,8 @@ int main(int argc, char *argv[])
             }
             else {
                 if ( parallel == "tbb" ) {
-                    sort.reset( new radix_tbb<sort_type, radix_step> );
+                    constexpr size_t split_parts_count = 100; // split array to 100 parts and let workers process them
+                    sort.reset( new radix_tbb<sort_type, radix_step, split_parts_count> );
                 }
                 else {
                     throw std::runtime_error( "parallel mode was not defined properly" );
