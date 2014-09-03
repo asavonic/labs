@@ -1,8 +1,8 @@
-CC      = g++
+CC      = mpic++
 CFLAGS  = -fopenmp --std=c++11
 OPT     = -O2
-INCLUDE = -I common -I openmp -I simple -I tbb -I .
-LIBS    = -lboost_program_options -ltbb
+INCLUDE = -I common -I openmp -I simple -I tbb -I mpi -I .
+LIBS    = -lboost_program_options -lboost_mpi -lboost_serialization -ltbb
 SRC     = main.cpp
 
 OBJ     = $(SRC:.c=.o)

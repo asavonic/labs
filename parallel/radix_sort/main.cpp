@@ -5,6 +5,7 @@
 #include <radix_simple.h>
 #include <radix_omp.h>
 #include <radix_tbb.h>
+#include <radix_mpi.h>
 
 using sort_type = double;
 
@@ -69,18 +70,14 @@ int main(int argc, char *argv[])
         if ( parallel == "none" ) {
             sort.reset( new radix_simple<sort_type, radix_step> );
         }
-        else {
-            if ( parallel == "omp" ) {
-                sort.reset( new radix_omp<sort_type, radix_step> );
-            }
-            else {
-                if ( parallel == "tbb" ) {
-                    sort.reset( new radix_tbb<sort_type, radix_step> );
-                }
-                else {
-                    throw std::runtime_error( "parallel mode was not defined properly" );
-                }
-            }
+        else if ( parallel == "omp" ) {
+            sort.reset( new radix_omp<sort_type, radix_step> );
+        } else if ( parallel == "tbb" ) {
+            sort.reset( new radix_tbb<sort_type, radix_step> );
+        } else if ( parallel == "mpi" ) {
+            sort.reset( new radix_mpi<sort_type, radix_step> );
+        } else {
+            throw std::runtime_error( "parallel mode was not defined properly" );
         }
 
         run_sort( sort.get(), array_size );
