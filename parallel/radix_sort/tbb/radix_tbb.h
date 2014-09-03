@@ -10,6 +10,7 @@
 #include "tbb/parallel_for.h"
 #include "tbb/blocked_range.h"
 #include "tbb/concurrent_vector.h"
+#include "tbb/concurrent_hash_map.h"
 #include <atomic>
 
 template <class T, std::size_t N, size_t split_parts_count >
@@ -20,25 +21,29 @@ class radix_tbb  : public radix_simple<T, N> {
 
     using part_t = std::pair<size_t, size_t>;
 
-    
-    std::vector<size_t> compute_counters_tbb() {
-        // for merge_but_size = 4 we got 1111000000000...0
-        constexpr Tuint merge_bitmask_shift = sizeof(Tuint) * 8 - merge_bit_size;
-        constexpr Tuint merge_bitmask = ( ~0u >> merge_bitmask_shift ) << merge_bitmask_shift;
+    tbb::concurrent_hash_map< part_t, std::array<size_t, N> > compute_counters_tbb( std::vector<part_t> parts, size_t mask_step )
+    {
+        tbb::concurrent_hash_map< part_t, std::array<size_t, N> > total_parts_counters;
 
-        std::vector<std::atomic_size_t> counters( merge_bit_size );
-
-        tbb::parallel_for( tbb::blocked_range<size_t>( 0, parent_t::data.size() ), 
+        tbb::parallel_for( tbb::blocked_range<size_t>( 0, parts.size() ), 
             [&]( const tbb::blocked_range<size_t>& r ) {
-                for ( size_t i = r.begin(); i < r.end(); i++ ) {
-                    Tuint* elem_ptr = reinterpret_cast<Tuint*>( &parent_t::data[i] );
-                    size_t pos = *elem_ptr;
-                    counters[ *elem_ptr >> merge_bitmask_shift ]++;
+                for ( size_t part_index = r.begin(); part_index < r.end(); part_index++ ) {
+                    std::array<size_t, N> part_counters;
+
+                    for ( size_t i = parts[ part_index ].first; i < parts[ part_index ].second; i++ ) {
+                        Tuint* elem_ptr = reinterpret_cast<Tuint*>( &parent_t::data[i] );
+                        size_t pos = *elem_ptr;
+                        pos >>= N * mask_step;
+                        pos &= ~( ( ~0u ) << N );
+                        part_counters[ pos ]++;
+                    }
+
+                    total_parts_counters.insert( part_counters, parts[ part_index ] );
                 }
             }
         );
 
-        return counters;
+        return total_parts_counters;
     }
 
     std::vector<std::atomic_size_t> compute_offsets( std::vector<std::atomic_size_t> counters ) {
@@ -69,6 +74,11 @@ class radix_tbb  : public radix_simple<T, N> {
     
     virtual void sort() {
         auto parts = split_data( parent_t::data );
+        
+        for ( size_t mask_step = 0; sizeof(T) * 8 > mask_step * N; mask_step++ ) {
+            auto parts_counters = compute_counters_tbb( parts, mask_step );
+        }
+    
     }
 };
 #endif
