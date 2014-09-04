@@ -12,6 +12,8 @@
 #include "tbb/concurrent_vector.h"
 #include "tbb/concurrent_hash_map.h"
 #include <atomic>
+#include <mutex>
+#include "tbb/task_scheduler_init.h"
 
 template <class T, std::size_t N, size_t split_parts_count >
 class radix_tbb  : public radix_simple<T, N> {
@@ -28,12 +30,14 @@ class radix_tbb  : public radix_simple<T, N> {
     using parts_counters_map_t = std::map< part_t, mask_values_t >;
     using parts_offsets_map_t = std::map< part_t, mask_values_t >;
 
-    parts_counters_map_t compute_counters_tbb( std::vector<part_t> parts, size_t mask_step )
+    parts_counters_map_t compute_counters_tbb( parts_vector_t parts, size_t mask_step )
     {
-        parts_counters_map_t total_parts_counters;
+        parts_counters_map_t parts_counters_map;
+
+        std::mutex map_lock;
 
         tbb::parallel_for( tbb::blocked_range<size_t>( 0, parts.size() ), 
-            [=,&total_parts_counters]( const tbb::blocked_range<size_t>& r ) {
+            [&]( const tbb::blocked_range<size_t>& r ) {
                 for ( size_t part_index = r.begin(); part_index < r.end(); part_index++ ) {
                     mask_values_t part_counters;
                     
@@ -45,12 +49,16 @@ class radix_tbb  : public radix_simple<T, N> {
                         part_counters[ pos ]++;
                     }
 
-                    total_parts_counters[ parts[ part_index ] ] = part_counters;
+                    assert( part_index < parts.size() );
+                    assert( part_index >= 0 );
+
+                    std::lock_guard<std::mutex> locked( map_lock );
+                    parts_counters_map[ parts[ part_index ] ] =  part_counters;
                 }
             }
         );
 
-        return total_parts_counters;
+        return parts_counters_map;
     }
 
     virtual void pass_tbb( parts_vector_t parts, parts_offsets_map_t& parts_offsets_map, size_t mask_step )
@@ -110,6 +118,7 @@ class radix_tbb  : public radix_simple<T, N> {
         parent_t::buffer.resize( parent_t::data.size() );
         auto parts = split_data( parent_t::data );
 
+        tbb::task_scheduler_init init(2);
         for ( size_t mask_step = 0; sizeof(T) * 8 > mask_step * N; mask_step++ ) {
             auto parts_counters_map = compute_counters_tbb( parts, mask_step );
             auto parts_offsets_map = compute_offsets_map( parts, parts_counters_map );
