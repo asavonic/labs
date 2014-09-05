@@ -4,6 +4,7 @@
 #include <radix_simple.h>
 #include <radix_omp.h>
 #include <radix_tbb.h>
+#include <radix_mpi.h>
 
 using sort_type = double;
 
@@ -62,6 +63,7 @@ int main(int argc, char *argv[])
         std::string input_file_path;
         std::string output_file_path;
         std::string parallel;
+        bool no_verification = 0;
 
         po::options_description desc("This is radix sort runner.\n\nAllowed options:");
         desc.add_options()
@@ -69,7 +71,7 @@ int main(int argc, char *argv[])
             ("size", po::value<size_t>( &array_size ), "number of elements in array")
             ("input,i", po::value< std::string >( &input_file_path ), "path to input file")
             ("output,o", po::value< std::string >( &output_file_path ), "path to output file")
-            ("parallel", po::value< std::string >( &parallel ), "set to omp, tbb, mpi_omp or none")
+            ("parallel", po::value< std::string >( &parallel )->required(), "set to omp, tbb, mpi_omp or none")
             ("force-dump", "for dump data to input.log and output.log")
             ("validate", "compare sorting with std::sort")
         ;
@@ -83,26 +85,25 @@ int main(int argc, char *argv[])
             return 1;
         }
 
+        if ( vm.count("no-verification") ) {
+            no_verification = true;
+        }
+
         po::notify(vm);
 
         std::shared_ptr< sorter<sort_type> > sort;
 
         if ( parallel == "none" ) {
             sort.reset( new radix_simple<sort_type, radix_step> );
-        }
-        else {
-            if ( parallel == "omp" ) {
-                sort.reset( new radix_omp<sort_type, radix_step> );
-            }
-            else {
-                if ( parallel == "tbb" ) {
-                    constexpr size_t split_parts_count = 256; // split array to 256 parts and let workers process them
-                    sort.reset( new radix_tbb<sort_type, radix_step, split_parts_count> );
-                }
-                else {
-                    throw std::runtime_error( "parallel mode was not defined properly" );
-                }
-            }
+        } else if ( parallel == "omp" ) {
+            sort.reset( new radix_omp<sort_type, radix_step> );
+        } else if ( parallel == "tbb" ) {
+            constexpr size_t split_parts_count = 256; // split array to 256 parts and let workers process them
+            sort.reset( new radix_tbb<sort_type, radix_step, split_parts_count> );
+        } else if ( parallel == "mpi_omp" ) {
+            sort.reset( new radix_mpi<sort_type, radix_step> );
+        } else {
+            throw std::runtime_error( "parallel mode was not defined properly" );
         }
 
         bool force_dump = vm.count("force-dump");
