@@ -18,10 +18,6 @@ public:
 
     typedef typename radix_simple<T, N>::Tuint Tuint;
 
-    virtual void hello() {
-        std::cout << "hello from radix_omp" << std::endl;
-    }
-
     virtual void pass( size_t n ) {
         std::valarray<size_t> counters ( size_t(0), 1 << N );
         std::valarray<size_t> offset_table( size_t(0), 1 << N ); 

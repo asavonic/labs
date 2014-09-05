@@ -32,9 +32,6 @@ public:
         world_rank = world.rank();
         int root = 0;
 
-        std::cout << "I am process " << world.rank() << " of " << world.size()
-                    << "." << std::endl;
-
         std::vector<T> process_data( parent_t::data.size() / world.size() );
         size_t root_data_shift = parent_t::data.size() - world.size() * process_data.size(); 
 
@@ -44,18 +41,19 @@ public:
             std::sort( parent_t::data.begin(), parent_t::data.begin() + root_data_shift );
         }
 
-        //std::sort( process_data.begin(), process_data.end() );
-        radix_omp<T, 8> sorter( std::move( process_data ) );
-        sorter.sort();
+        radix_omp<T, 8> sorter( process_data );
+        sorter.run();
+
+        process_data = std::move( sorter.data );
 
         mpi::gather( world, &process_data.front(), process_data.size(), &parent_t::data[root_data_shift], root );
 
         if ( world.rank() == root ) {
             std::vector< std::pair<size_t,size_t> > gather_indexes;
 
-            gather_indexes.push_back( std::make_pair( 0, root_data_shift ) );
+            gather_indexes.push_back( std::make_pair( 0, root_data_shift + process_data.size() ) );
 
-            for ( int i = 0; i < world.size(); i++ ) {
+            for ( int i = 1; i < world.size(); i++ ) {
                 size_t prev_end = gather_indexes.back().second;
                 gather_indexes.push_back( std::make_pair( prev_end, prev_end + process_data.size() ) );
             }
@@ -73,19 +71,15 @@ public:
 
             for ( auto& index : indexes ) {
                 if ( index.first != index.second && parent_t::data[ index.first ] < parent_t::buffer[i] ) {
-                     parent_t::buffer[i] = parent_t::data[ index.first ];
-                     index_of_min_ptr = &index.first;
+                    parent_t::buffer[i] = parent_t::data[ index.first ];
+                    index_of_min_ptr = &index.first;
                 }
             }
 
-            *index_of_min_ptr++;
+            (*index_of_min_ptr)++;
         }
 
         std::swap( parent_t::buffer, parent_t::data );
-    }
-
-    virtual void hello() {
-        std::cout << "hello from radix_omp" << std::endl;
     }
 
     virtual void pass( size_t n ) {

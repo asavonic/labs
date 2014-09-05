@@ -39,14 +39,7 @@ public:
                                   "Can`t find uint representation of T" );
     }
 
-    virtual void hello() {
-        std::cout << "hello from radix_simple" << std::endl;
-    }
-
     virtual void sort() override {
-        // constexpr uint32_t highest_bit = 1 << ( sizeof(T) * 8 - 1 );
-        std::cout << "running simple radix" << std::endl;
-
         this->buffer.resize( this->data.size() );
         for ( size_t step = 0; sizeof(T) * 8 > step * N; step++ ) {
             pass( step );

@@ -93,16 +93,6 @@ class radix_tbb  : public radix_simple<T, N> {
             }
         }
 
-        /*
-        for ( auto& map_elem : offsets_map ) {
-            printf( "(%lu, %lu) => ", map_elem.first.first, map_elem.first.second );
-            for ( auto& offset : map_elem.second ) {
-                std::cout << offset << ", ";
-            }
-            std::cout << std::endl;
-        }
-        */
-
         return offsets_map;
     }
 
@@ -137,20 +127,6 @@ class radix_tbb  : public radix_simple<T, N> {
 
         assert( false );
         return index;
-
-        /*
-        while ( index_delta > 1 ) {
-            if ( data_uint_ptr[index] & MSB_mask ) {
-                index_delta = index_delta / 2;
-                index -= index_delta;
-            } else {
-                index_delta = index_delta / 2;
-                index += index_delta;
-            }
-        }
-
-        return ( data_uint_ptr[index] & MSB_mask ) ? index : index + 1;
-        */
     }
 
     virtual void negative_pass( std::vector<T>& data ) {
@@ -161,7 +137,6 @@ class radix_tbb  : public radix_simple<T, N> {
         size_t negative_index = data.size() - first_negative_index - 1;
 
         Tuint* data_uint_ptr = reinterpret_cast<Tuint*>( data.data() );
-        //assert( data_uint_ptr[first_negative_index] & MSB_mask );
 
         for ( size_t i = 0; i < data.size(); i++ ) {
             if ( data[i] < 0 ) {

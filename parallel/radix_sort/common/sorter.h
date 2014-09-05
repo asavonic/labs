@@ -29,10 +29,6 @@ public:
 
     virtual void sort() = 0;
 
-    virtual void hello() {
-        std::cout << "hello from sorter" << std::endl;
-    }
-
     virtual void run() {
         std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
 

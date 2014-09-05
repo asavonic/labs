@@ -63,7 +63,6 @@ int main(int argc, char *argv[])
         std::string input_file_path;
         std::string output_file_path;
         std::string parallel;
-        bool no_verification = 0;
 
         po::options_description desc("This is radix sort runner.\n\nAllowed options:");
         desc.add_options()
@@ -83,10 +82,6 @@ int main(int argc, char *argv[])
         if (vm.count("help")) {
             std::cout << desc << std::endl;
             return 1;
-        }
-
-        if ( vm.count("no-verification") ) {
-            no_verification = true;
         }
 
         po::notify(vm);
