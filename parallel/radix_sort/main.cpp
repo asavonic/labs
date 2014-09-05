@@ -8,7 +8,7 @@
 
 using sort_type = double;
 
-void run_sort( sorter<sort_type>* sort, size_t size ) {
+void run_sort( sorter<sort_type>* sort, size_t size, bool force_dump ) {
     std::random_device rd;
     std::mt19937_64 gen(rd());
     std::uniform_real_distribution<sort_type> dis(-1000.f, 1000.f);
@@ -19,6 +19,10 @@ void run_sort( sorter<sort_type>* sort, size_t size ) {
         sort->data.push_back( rand_float() );
     }
 
+    if ( force_dump ) {
+        sort->write_to_file("input.log");
+    }
+
     sort->run();
 
     if ( std::is_sorted( sort->data.begin(), sort->data.end() ) ) {
@@ -26,6 +30,9 @@ void run_sort( sorter<sort_type>* sort, size_t size ) {
     }
     else {
         std::cout << "FAIL" << std::endl;
+    }
+
+    if ( force_dump ) {
         sort->write_to_file("output.log");
     }
 
@@ -51,6 +58,7 @@ int main(int argc, char *argv[])
             ("input,i", po::value< std::string >( &input_file_path ), "path to input file")
             ("output,o", po::value< std::string >( &output_file_path ), "path to output file")
             ("parallel", po::value< std::string >( &parallel ), "set to omp, tbb, mpi_omp or none")
+            ("force-dump", "for dump data to input.log and output.log")
         ;
 
 
@@ -84,7 +92,9 @@ int main(int argc, char *argv[])
             }
         }
 
-        run_sort( sort.get(), array_size );
+        bool force_dump = vm.count("force-dump");
+
+        run_sort( sort.get(), array_size, force_dump );
     }
     catch ( boost::program_options::error& po_error ) {
         std::cerr << po_error.what() << std::endl; 

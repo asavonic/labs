@@ -90,7 +90,7 @@ class radix_tbb  : public radix_simple<T, N> {
     {
         parts_offsets_map_t offsets_map = counters_map; // just a fast creation, or maybe not 
 
-        for ( size_t counter_index = 0; counter_index < N; counter_index++ ) {
+        for ( size_t counter_index = 0; counter_index < mask_values_array_size; counter_index++ ) {
             offsets_map[ parts.front() ].at( counter_index ) = ( counter_index == 0 ) ? 0 : 
                                 offsets_map[ parts.back() ].at( counter_index - 1 ) + counters_map[ parts.back() ].at( counter_index - 1 );
 
@@ -98,9 +98,10 @@ class radix_tbb  : public radix_simple<T, N> {
                 offsets_map[ parts[ part_index ] ].at( counter_index ) = offsets_map[ parts[ part_index - 1 ] ].at( counter_index ) + counters_map[ parts[ part_index - 1 ] ].at( counter_index );
             }
         }
-        /* 
+
+        /*
         for ( auto& map_elem : offsets_map ) {
-            printf( "(%d, %d) => ", map_elem.first.first, map_elem.first.second );
+            printf( "(%lu, %lu) => ", map_elem.first.first, map_elem.first.second );
             for ( auto& offset : map_elem.second ) {
                 std::cout << offset << ", ";
             }
@@ -131,7 +132,6 @@ class radix_tbb  : public radix_simple<T, N> {
         parent_t::buffer.resize( parent_t::data.size() );
         auto parts = split_data( parent_t::data );
 
-        tbb::task_scheduler_init init(2);
         for ( size_t mask_step = 0; sizeof(T) * 8 > mask_step * N; mask_step++ ) {
             auto parts_counters_map = compute_counters_tbb( parts, mask_step );
             auto parts_offsets_map = compute_offsets_map( parts, parts_counters_map );
