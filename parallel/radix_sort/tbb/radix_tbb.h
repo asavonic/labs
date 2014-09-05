@@ -2,18 +2,10 @@
 #define __RADIX_TBB_H
 
 #include <array>
-#include <functional>
 #include <sorter.h>
-#include <bitset>
-#include "tbb/parallel_reduce.h"
-#include "tbb/parallel_scan.h"
 #include "tbb/parallel_for.h"
 #include "tbb/blocked_range.h"
-#include "tbb/concurrent_vector.h"
-#include "tbb/concurrent_hash_map.h"
-#include <atomic>
 #include <mutex>
-#include "tbb/task_scheduler_init.h"
 
 template <class T, std::size_t N, size_t split_parts_count >
 class radix_tbb  : public radix_simple<T, N> {

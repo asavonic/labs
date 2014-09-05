@@ -19,13 +19,10 @@ public:
 
     virtual void sort() = 0;
 
-    /* {
-        std::cout << "running std::sort" << std::endl;
-        std::sort( array.begin(), array.end() ) ;
-    } */
     virtual void hello() {
         std::cout << "hello from sorter" << std::endl;
     }
+
     virtual void run() {
         std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
 

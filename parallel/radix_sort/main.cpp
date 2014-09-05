@@ -1,5 +1,4 @@
 #include <iostream>
-#include <memory>
 #include <boost/program_options.hpp>
 #include <sorter.h>
 #include <radix_simple.h>
@@ -97,7 +96,7 @@ int main(int argc, char *argv[])
             }
             else {
                 if ( parallel == "tbb" ) {
-                    constexpr size_t split_parts_count = 100; // split array to 100 parts and let workers process them
+                    constexpr size_t split_parts_count = 256; // split array to 256 parts and let workers process them
                     sort.reset( new radix_tbb<sort_type, radix_step, split_parts_count> );
                 }
                 else {
