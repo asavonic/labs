@@ -17,6 +17,9 @@ all: $(MAIN)
 debug: OPT = -O0 -g
 debug: $(MAIN)
 
+debugopt: OPT = -O2 -g
+debugopt: $(MAIN)
+
 $(MAIN): $(OBJ) 
 	$(CC) $(CFLAGS) $(OPT) $(INCLUDE) -o $(MAIN) $(OBJ) $(LFLAGS) $(LIBS)
 
