@@ -24,6 +24,8 @@ class radix_tbb  : public radix_simple<T, N> {
     using part_t = std::pair<size_t, size_t>;
     using parts_vector_t = std::vector<part_t>;
 
+    static constexpr Tuint MSB_mask = 1 << ( sizeof(Tuint) * 8 - 1 );
+
     static constexpr size_t mask_values_array_size = std::pow( 2, N );
     using mask_values_t = std::array<size_t, mask_values_array_size>;
 
@@ -128,6 +130,57 @@ class radix_tbb  : public radix_simple<T, N> {
         return parts;
     }
     
+    virtual size_t find_first_negative( std::vector<T>& data ) {
+        size_t first_negative_index = 0;
+        size_t index_delta = data.size();
+        size_t index = data.size() - 1;
+
+        Tuint* data_uint_ptr = reinterpret_cast<Tuint*>( data.data() );
+
+        for ( index = 0; index < data.size(); index++ ) {
+            if ( data[ index ] < 0 ) {
+                return index;
+            }
+        };
+
+        assert( false );
+        return index;
+
+        /*
+        while ( index_delta > 1 ) {
+            if ( data_uint_ptr[index] & MSB_mask ) {
+                index_delta = index_delta / 2;
+                index -= index_delta;
+            } else {
+                index_delta = index_delta / 2;
+                index += index_delta;
+            }
+        }
+
+        return ( data_uint_ptr[index] & MSB_mask ) ? index : index + 1;
+        */
+    }
+
+    virtual void negative_pass( std::vector<T>& data ) {
+        size_t first_negative_index = find_first_negative( data );
+
+        // new indexes for reorder: negative in reversed order, then positive in correct order
+        size_t positive_index = data.size() - first_negative_index;
+        size_t negative_index = data.size() - first_negative_index - 1;
+
+        Tuint* data_uint_ptr = reinterpret_cast<Tuint*>( data.data() );
+        //assert( data_uint_ptr[first_negative_index] & MSB_mask );
+
+        for ( size_t i = 0; i < data.size(); i++ ) {
+            if ( data[i] < 0 ) {
+                parent_t::buffer[ negative_index-- ] = data[i];
+            } else {
+                assert( positive_index < data.size() );
+                parent_t::buffer[ positive_index++ ] = data[i];
+            }
+        }
+    }
+
     virtual void sort() {
         parent_t::buffer.resize( parent_t::data.size() );
         auto parts = split_data( parent_t::data );
@@ -138,6 +191,9 @@ class radix_tbb  : public radix_simple<T, N> {
             pass_tbb( parts, parts_offsets_map, mask_step );
             std::swap( parent_t::data, parent_t::buffer );
         }
+
+        negative_pass( parent_t::data );
+        std::swap( parent_t::data, parent_t::buffer );
     }
 };
 #endif

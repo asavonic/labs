@@ -11,10 +11,11 @@ MAIN    = radix
 
 .PHONY: depend clean
 
-debug: OPT = -O0 -g
-debug: $(MAIN)
 
 all: $(MAIN)
+
+debug: OPT = -O0 -g
+debug: $(MAIN)
 
 $(MAIN): $(OBJ) 
 	$(CC) $(CFLAGS) $(OPT) $(INCLUDE) -o $(MAIN) $(OBJ) $(LFLAGS) $(LIBS)
