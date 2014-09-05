@@ -4,185 +4,196 @@
 #include <array>
 #include <functional>
 #include <sorter.h>
+#include <bitset>
 #include "tbb/parallel_reduce.h"
+#include "tbb/parallel_scan.h"
+#include "tbb/parallel_for.h"
 #include "tbb/blocked_range.h"
+#include "tbb/concurrent_vector.h"
+#include "tbb/concurrent_hash_map.h"
+#include <atomic>
+#include <mutex>
+#include "tbb/task_scheduler_init.h"
 
-template <class T, std::size_t N >
-class radix_tbb  : public sorter<T> {
-    typedef sorter<T> parent_t;
+template <class T, std::size_t N, size_t split_parts_count >
+class radix_tbb  : public radix_simple<T, N> {
+    using parent_t = radix_simple<T, N>;
 
-    std::vector<T> buffer;
+    using Tuint = typename parent_t::Tuint;
 
-    struct ComputeChunk {
-        typedef typename radix_simple<T, N>::Tuint Tuint;
+    using part_t = std::pair<size_t, size_t>;
+    using parts_vector_t = std::vector<part_t>;
 
-        std::vector< std::pair<int, int> > chunks;
-        size_t size;
-        std::reference_wrapper< std::vector<T> > data;
-        std::reference_wrapper< std::vector<T> > buffer;
+    static constexpr Tuint MSB_mask = 1 << ( sizeof(Tuint) * 8 - 1 );
 
-        int final_swap; // counter, need to correctly swap back to data after join stage
+    static constexpr size_t mask_values_array_size = std::pow( 2, N );
+    using mask_values_t = std::array<size_t, mask_values_array_size>;
 
-        ComputeChunk ( const ComputeChunk& parent, tbb::split ) : data(parent.data), buffer(parent.buffer) {
-            final_swap = parent.final_swap;
-            size = 0;
-        }
+    using parts_counters_map_t = std::map< part_t, mask_values_t >;
+    using parts_offsets_map_t = std::map< part_t, mask_values_t >;
 
-        ComputeChunk ( radix_tbb<T, N>* sorter ) : data(sorter->data), buffer(sorter->buffer) {
-            final_swap = 0;
-            size = 0;
-        }
+    parts_counters_map_t compute_counters_tbb( parts_vector_t parts, size_t mask_step )
+    {
+        parts_counters_map_t parts_counters_map;
 
-        void copy_phisical_memory( decltype(data) _to, decltype(data) _from, decltype(chunks) _chunks ) {
-            for ( auto& chunk : _chunks ) {
-                memcpy( &_to.get()[ chunk.first ], &_from.get()[ chunk.first ], ( chunk.second - chunk.first ) * sizeof(T) );
-            }
-        }
+        std::mutex map_lock;
 
-        bool is_sorted() {
-            size_t pos_prev = chunks.front().first;
-
-            for ( auto& chunk : chunks ) {
-                for ( size_t pos = chunk.first; pos < chunk.second; pos++ ) {
-                    if ( data.get()[pos_prev] > data.get()[pos] ) {
-                        return false;
-                    }
-                    pos_prev = pos;
-                }
-            }
-
-            return true;
-        }
-
-        struct {
-            using chunk_iterator = typename decltype(chunks)::iterator;
-            size_t pos;
-            chunk_iterator begin;
-            chunk_iterator end;
-            chunk_iterator chunk;
-
-            void init( chunk_iterator _begin, chunk_iterator _end ) {
-                begin = _begin;
-                end   = _end;
-                chunk = begin;
-                pos   = chunk->first;
-            }
-
-            int get_next() {
-                if ( chunk != end ) {
-                    if ( pos == chunk->second ) {
-                        chunk++;
-                        if ( chunk != end ) {
-                            pos = chunk->first;
-                        } 
-                        else {
-                            return -1;
-                        }
+        tbb::parallel_for( tbb::blocked_range<size_t>( 0, parts.size() ), 
+            [&]( const tbb::blocked_range<size_t>& r ) {
+                for ( size_t part_index = r.begin(); part_index < r.end(); part_index++ ) {
+                    mask_values_t part_counters = { 0 };
+                    
+                    for ( size_t i = parts[ part_index ].first, i_end = parts[ part_index  ].second; i < i_end; i++ ) {
+                        Tuint* elem_ptr = reinterpret_cast<Tuint*>( &parent_t::data[i] );
+                        size_t pos = *elem_ptr;
+                        pos >>= N * mask_step;
+                        pos &= ~( ( ~0u ) << N );
+                        part_counters[ pos ]++;
                     }
 
-                    return pos++;
+                    assert( part_index < parts.size() );
+                    assert( part_index >= 0 );
+
+                    std::lock_guard<std::mutex> locked( map_lock );
+                    parts_counters_map[ parts[ part_index ] ] =  part_counters;
                 }
-                else {
-                    return -1;
-                }
             }
-        } merge;
+        );
 
-        void operator()( tbb::blocked_range<int> r ) {
-            std::sort( data.get().begin() + r.begin(), data.get().begin() + r.end() );
-            
-            auto new_chunks = chunks;
-            new_chunks.push_back( std::pair<int, int>( r.begin(), r.end() ) );
+        return parts_counters_map;
+    }
 
-            if ( !chunks.empty() ) {
-                merge.init( chunks.begin(), chunks.end() );
+    virtual void pass_tbb( parts_vector_t parts, parts_offsets_map_t& parts_offsets_map, size_t mask_step )
+    {
+        tbb::parallel_for( tbb::blocked_range<size_t>( 0, parts.size() ), 
+            [&]( const tbb::blocked_range<size_t>& r ) {
+                for ( size_t part_index = r.begin(); part_index < r.end(); part_index++ ) {
+                    auto part_offsets = parts_offsets_map[ parts[ part_index ] ];
+                    for ( size_t i = parts[ part_index ].first; i < parts[ part_index ].second; i++ ) {
+                        Tuint* elem_ptr = reinterpret_cast<Tuint*>( &parent_t::data[i] );
+                        size_t elem_uint = *elem_ptr;
+                        elem_uint >>= N * mask_step;
+                        elem_uint &= ~( ( ~0u ) << N );
+                        size_t offset_index = elem_uint;
+                        
+                        assert( offset_index < part_offsets.size() );
+                        assert( offset_index >= 0 );
+                        assert( part_offsets[ offset_index  ] < parent_t::buffer.size() );
+                        assert( part_offsets[ offset_index  ] >= 0  );
 
-                int my_pos = merge.get_next();
-                int other_pos = r.begin();
-
-                for ( auto& chunk : new_chunks ) {
-                    for ( size_t i = chunk.first; i < chunk.second; i++ ) {
-                        if ( my_pos != -1 && ( other_pos == -1 || data.get()[my_pos] < data.get()[other_pos] ) ) {
-                            buffer.get()[i] = data.get()[my_pos];
-                            my_pos = merge.get_next();
-                        } 
-                        else {
-                            buffer.get()[i] = data.get()[other_pos];
-                            other_pos = ( other_pos + 1 == r.end() ) ? -1 : other_pos + 1;
-                        }
-                    }
-                }
-
-                copy_phisical_memory( data, buffer, new_chunks );
-            }
-
-            size += r.end() - r.begin();
-            chunks = new_chunks;
-#ifndef NDEBUG
-            if ( !is_sorted() ) {
-                throw std::runtime_error("operator() for " + std::to_string( chunks.size() ) + " chunks fails!");
-            }
-#endif
-        }
-
-        void join( ComputeChunk& other ) {
-            merge.init( chunks.begin(), chunks.end() );
-            other.merge.init( other.chunks.begin(), other.chunks.end() );
-
-            if ( &data.get().front() != &other.data.get().front() ) {
-                other.copy_phisical_memory( other.buffer, other.data, other.chunks );
-                std::swap( other.data, other.buffer );
-            }
-
-            auto new_chunks = chunks;
-            new_chunks.insert( new_chunks.end(), other.chunks.begin(), other.chunks.end() );
-
-            int my_pos = merge.get_next();
-            int other_pos = other.merge.get_next();
-
-            for ( auto& chunk : new_chunks ) {
-                for ( size_t i = chunk.first; i < chunk.second; i++ ) {
-                    if ( my_pos != -1 && ( other_pos == -1 || data.get()[my_pos] < data.get()[other_pos] ) ) {
-                        buffer.get()[i] = data.get()[my_pos];
-                        my_pos = merge.get_next();
-                    } 
-                    else {
-                        buffer.get()[i] = data.get()[other_pos];
-                        other_pos = other.merge.get_next();
+                        parent_t::buffer[ part_offsets[ offset_index ]++ ] = parent_t::data[i];
                     }
                 }
             }
+        );
+    }
 
-            chunks = new_chunks;
-            size += other.size;
-            std::swap( buffer, data );
-            final_swap++;
+    parts_offsets_map_t compute_offsets_map( parts_vector_t parts,  parts_counters_map_t counters_map ) 
+    {
+        parts_offsets_map_t offsets_map = counters_map; // just a fast creation, or maybe not 
 
-#ifndef NDEBUG
-            if ( !is_sorted() ) {
-                throw std::runtime_error("join() fails!");
+        for ( size_t counter_index = 0; counter_index < mask_values_array_size; counter_index++ ) {
+            offsets_map[ parts.front() ].at( counter_index ) = ( counter_index == 0 ) ? 0 : 
+                                offsets_map[ parts.back() ].at( counter_index - 1 ) + counters_map[ parts.back() ].at( counter_index - 1 );
+
+            for ( size_t part_index = 1; part_index < parts.size(); part_index++ ) {
+                offsets_map[ parts[ part_index ] ].at( counter_index ) = offsets_map[ parts[ part_index - 1 ] ].at( counter_index ) + counters_map[ parts[ part_index - 1 ] ].at( counter_index );
             }
-#endif
         }
-    };
 
-    friend struct ComputeChunk;
+        /*
+        for ( auto& map_elem : offsets_map ) {
+            printf( "(%lu, %lu) => ", map_elem.first.first, map_elem.first.second );
+            for ( auto& offset : map_elem.second ) {
+                std::cout << offset << ", ";
+            }
+            std::cout << std::endl;
+        }
+        */
 
+        return offsets_map;
+    }
+
+    parts_vector_t split_data( const std::vector<T> data ) {
+        assert( split_parts_count < data.size() );
+        size_t part_size = data.size() / split_parts_count;
+
+        parts_vector_t parts( split_parts_count );
+
+        parts[0] = std::make_pair( 0, part_size );
+        for ( size_t i = 1; i < parts.size(); i++ ) {
+            parts[i].first = parts[i - 1].second;
+            parts[i].second = parts[i].first + part_size;
+        }
+        parts.back().second = data.size();
+        
+        return parts;
+    }
+    
+    virtual size_t find_first_negative( std::vector<T>& data ) {
+        size_t first_negative_index = 0;
+        size_t index_delta = data.size();
+        size_t index = data.size() - 1;
+
+        Tuint* data_uint_ptr = reinterpret_cast<Tuint*>( data.data() );
+
+        for ( index = 0; index < data.size(); index++ ) {
+            if ( data[ index ] < 0 ) {
+                return index;
+            }
+        };
+
+        assert( false );
+        return index;
+
+        /*
+        while ( index_delta > 1 ) {
+            if ( data_uint_ptr[index] & MSB_mask ) {
+                index_delta = index_delta / 2;
+                index -= index_delta;
+            } else {
+                index_delta = index_delta / 2;
+                index += index_delta;
+            }
+        }
+
+        return ( data_uint_ptr[index] & MSB_mask ) ? index : index + 1;
+        */
+    }
+
+    virtual void negative_pass( std::vector<T>& data ) {
+        size_t first_negative_index = find_first_negative( data );
+
+        // new indexes for reorder: negative in reversed order, then positive in correct order
+        size_t positive_index = data.size() - first_negative_index;
+        size_t negative_index = data.size() - first_negative_index - 1;
+
+        Tuint* data_uint_ptr = reinterpret_cast<Tuint*>( data.data() );
+        //assert( data_uint_ptr[first_negative_index] & MSB_mask );
+
+        for ( size_t i = 0; i < data.size(); i++ ) {
+            if ( data[i] < 0 ) {
+                parent_t::buffer[ negative_index-- ] = data[i];
+            } else {
+                assert( positive_index < data.size() );
+                parent_t::buffer[ positive_index++ ] = data[i];
+            }
+        }
+    }
 
     virtual void sort() {
-        buffer.resize( this->data.size() );
-        ComputeChunk compute(this);
+        parent_t::buffer.resize( parent_t::data.size() );
+        auto parts = split_data( parent_t::data );
 
-        tbb::parallel_reduce( tbb::blocked_range<int>( 0, this->data.size() ),
-                              compute);
-
-        if ( std::is_sorted( buffer.begin(), buffer.end() ) ) {
-            std::swap( buffer, this->data );
-            std::cout << "swapped" << std::endl;
+        for ( size_t mask_step = 0; sizeof(T) * 8 > mask_step * N; mask_step++ ) {
+            auto parts_counters_map = compute_counters_tbb( parts, mask_step );
+            auto parts_offsets_map = compute_offsets_map( parts, parts_counters_map );
+            pass_tbb( parts, parts_offsets_map, mask_step );
+            std::swap( parent_t::data, parent_t::buffer );
         }
-        std::cout << "final_swap = " << compute.final_swap << std::endl;
 
-    } 
-    
+        negative_pass( parent_t::data );
+        std::swap( parent_t::data, parent_t::buffer );
+    }
 };
 #endif

@@ -8,28 +8,48 @@
 
 using sort_type = double;
 
-void run_sort( sorter<sort_type>* sort, size_t size ) {
+int run_sort( sorter<sort_type>* sort, size_t size, bool force_dump, bool validate ) {
     std::random_device rd;
     std::mt19937_64 gen(rd());
-    std::uniform_real_distribution<sort_type> dis(-1000.f, 1000.f);
+    std::uniform_real_distribution<sort_type> dis( -1000.f, 1000.f);
     auto rand_float = std::bind(dis, gen);
 
     sort->data.reserve( size );
     for ( size_t i = 0; i < sort->data.capacity(); i++ ) {
         sort->data.push_back( rand_float() );
     }
+    
+    std::vector<sort_type> gold_result;
+    if ( validate ) { 
+        gold_result = sort->data;
+        std::sort( gold_result.begin(), gold_result.end() );
+    }
+
+    if ( force_dump ) {
+        sort->write_to_file("input.log");
+    }
 
     sort->run();
 
-    if ( std::is_sorted( sort->data.begin(), sort->data.end() ) ) {
-        std::cout << "SUCCESS" << std::endl;
-    }
-    else {
-        std::cout << "FAIL" << std::endl;
+    std::cout << "time elapsed = " << sort->time_spent.count() << " ms" << std::endl;
+
+    if ( force_dump ) {
         sort->write_to_file("output.log");
     }
 
-    std::cout << "time elapsed = " << sort->time_spent.count() << " ms" << std::endl;
+    if ( validate ) {
+        for ( size_t i = 0; i < gold_result.size(); i++ ) {
+            if ( gold_result[i] != sort->data[i] ) {
+                std::cerr << "Verification failed at index " <<  i << ":" << std::endl <<
+                            "\tgold_result[i] = " << gold_result[i] << std::endl <<
+                            "\tsort->data[i] = " << sort->data[i] << std::endl;
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+
 }
 
 namespace po = boost::program_options;
@@ -47,10 +67,12 @@ int main(int argc, char *argv[])
         po::options_description desc("This is radix sort runner.\n\nAllowed options:");
         desc.add_options()
             ("help", "produce help message")
-            ("size", po::value<size_t>( &array_size )->required(), "number of elements in array")
+            ("size", po::value<size_t>( &array_size ), "number of elements in array")
             ("input,i", po::value< std::string >( &input_file_path ), "path to input file")
             ("output,o", po::value< std::string >( &output_file_path ), "path to output file")
-            ("parallel", po::value< std::string >( &parallel )->required(), "set to omp, tbb, mpi_omp or none")
+            ("parallel", po::value< std::string >( &parallel ), "set to omp, tbb, mpi_omp or none")
+            ("force-dump", "for dump data to input.log and output.log")
+            ("validate", "compare sorting with std::sort")
         ;
 
 
@@ -75,7 +97,8 @@ int main(int argc, char *argv[])
             }
             else {
                 if ( parallel == "tbb" ) {
-                    sort.reset( new radix_tbb<sort_type, radix_step> );
+                    constexpr size_t split_parts_count = 100; // split array to 100 parts and let workers process them
+                    sort.reset( new radix_tbb<sort_type, radix_step, split_parts_count> );
                 }
                 else {
                     throw std::runtime_error( "parallel mode was not defined properly" );
@@ -83,7 +106,13 @@ int main(int argc, char *argv[])
             }
         }
 
-        run_sort( sort.get(), array_size );
+        bool force_dump = vm.count("force-dump");
+        bool validate = vm.count("validate");
+
+        int retcode = run_sort( sort.get(), array_size, force_dump, validate );
+        std::cout << ( retcode ? "FAIL" : "SUCCESS" ) << std::endl;
+
+        return retcode;
     }
     catch ( boost::program_options::error& po_error ) {
         std::cerr << po_error.what() << std::endl; 
